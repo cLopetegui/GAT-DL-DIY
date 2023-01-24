@@ -77,8 +77,7 @@ class GAT_layer(nn.Module):
         att_coefficients_contrib_target=torch.sum(h_proj*self.attention_weight_target,dim=-1)
         
         #The idea now is the following: 
-        #From the data we have edge_index which has a shape (2,E), E number of edges so that edge_index[0] stores the index of
-        #the source nodes
+        #From the data we have edge_index which has a shape (2,E), E number of edges so that edge_index[0] stores the index of the source nodes
         #and edge_index[1] stores the index of the target nodes. So, now, what we do is to lift h_proj,att_coeff...,att_coeff...
         #from (N,N_heads,...)->(E,N_heads,...) with ...=1 for the att weights and =F' for the h_proj_lift
         
@@ -102,41 +101,56 @@ class GAT_layer(nn.Module):
         h_new=self.get_weighted_contirbutions_new_features(h_proj_lift,att_weights_per_edge_soft_maxed,edge_index)
         
         return (h_new,edge_index)
-        
+    
     def soft_max_att_weights_over_neighbors(self,att_weights,edge_index):
+        
         exp_att_weights=att_weights.exp()
-        soft_max_weights=torch.clone(exp_att_weights)
-        already_computed=torch.zeros(edge_index.shape[0])
-        for i in range(edge_index.shape[0]):
-            equal_index=[i]
-            if already_computed[i]==1:
+      
+        neighb_aware_denominator=torch.zeros((self.num_nodes,self.num_heads))
+        
+        #broadcast target_index=edge_index[1]
+        target_index_broadcasted=torch.clone(edge_index[1])
+        
+        for i in range(len(exp_att_weights.shape)):
+            if i+1>len(edge_index[1].shape):
+                target_index_broadcasted=target_index_broadcasted.unsqueeze(-1)
+            else: 
                 continue
-            already_computed[i]=1
-            for j in range(i,edge_index.shape[0]):
-                if edge_index[0][i]==edge_index[0][j]:
-                    equal_index.append(j)
-                    already_computed[j]=1
-            neighborhood_weights_denominator=exp_att_weights[equal_index].sum(dim=0).unsqueeze(dim=0)
-            soft_max_weights[equal_index]=soft_max_weights[equal_index]/(neighborhood_weights_denominator+1e-16)
-        return soft_max_weights.unsqueeze(dim=-1)
+        target_index_broadcasted=target_index_broadcasted.expand_as(exp_att_weights)
+        
+        neighb_aware_denominator.scatter_add_(0,target_index_broadcasted,exp_att_weights)
+        
+        exp_att_weights_softmaxed=exp_att_weights/(neighb_aware_denominator.index_select(0,edge_index[1])+1e-16)
+        
+        return exp_att_weights_softmaxed.unsqueeze(-1)
+    
+    
+   
     
     def get_weighted_contirbutions_new_features(self,h_proj_lift,att_weights,edge_index):
         # Here we just multiply the lifted features (shape (E,N_heads,F')) with the att weights already passed through the softmax
         # which have shape (E,N_heads,1) -> the output should have shape (E,N_heads,F')
-        
         mult_features_weights=att_weights*h_proj_lift
+        #print(f'shape of mult features weights is {mult_features_weights.shape}')
+        
         
         # Now we need to get the new features by adding over the neighbors of each node
         
         new_features=torch.zeros((self.num_nodes,self.num_heads,self.num_out_features),dtype=mult_features_weights.dtype)
         
-        for i in range(self.num_nodes):
-            equal_index=[]
-            for j in range(edge_index[0].shape[0]):
-                if edge_index[0][j]==i:
-                    equal_index.append(j)
-            #Now compute the new features for node i 
-            new_features[i]=mult_features_weights[equal_index].sum(dim=0).unsqueeze(dim=0) # input: (E,Nheads,F')-> intermediate (E',Nheads,F') -> output (1,Nheads,F')
+        #broadcast target_index=edge_index[1]
+        target_index_broadcasted=torch.clone(edge_index[1])
+        
+        for i in range(len(mult_features_weights.shape)):
+            if i+1>len(edge_index[1].shape):
+                target_index_broadcasted=target_index_broadcasted.unsqueeze(-1)
+            else: 
+                continue
+        target_index_broadcasted=target_index_broadcasted.expand_as(mult_features_weights)
+        #print(f'shape of broadcasted index is {target_index_broadcasted.shape}')
+        
+        new_features.scatter_add_(0,target_index_broadcasted,mult_features_weights)
+        
         if self.concat: 
             new_features_sigm=self.activation(new_features)
             new_features_output=new_features.view(self.num_nodes,self.num_heads*self.num_out_features)
@@ -151,4 +165,10 @@ class GAT_layer(nn.Module):
         
         
         
+
+
+# In[ ]:
+
+
+
 

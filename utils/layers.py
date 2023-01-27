@@ -59,6 +59,8 @@ class GAT_layer(nn.Module):
         
         nn.init.xavier_uniform_(self.attention_weight_source)
         nn.init.xavier_uniform_(self.attention_weight_target)
+        
+        self.attention_scores=torch.Tensor()
     
     def forward(self,data):
         
@@ -94,9 +96,12 @@ class GAT_layer(nn.Module):
         
         #Now we need to apply a soft max that normalizes over all neighbors of node i. 
         att_weights_per_edge_soft_maxed=self.soft_max_att_weights_over_neighbors(att_weights_per_edge,edge_index)
-
+        
+        self.attention_scores=att_weights_per_edge_soft_maxed
+        
         att_weights_per_edge_soft_maxed=self.dropout(att_weights_per_edge_soft_maxed)
         #Now we can add the contribution of neighbors to compute the new values of the features
+        
         
         h_new=self.get_weighted_contirbutions_new_features(h_proj_lift,att_weights_per_edge_soft_maxed,edge_index)
         

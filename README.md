@@ -5,4 +5,4 @@ We implemented, using Pytorch, the graph attention layer proposed by [Velickovic
 
 We tested the model in transductive learning settings, in the citation datasets Cora, Pubmed and Citeseer, reaching accuracies around 75 %. 
 
-We implemented the Nueral tree representation with the objective of applying the GAT network to this more structured representation, but we faced some issues in the manipulation of this structure by GAT. 
+We implemented the [Nueral tree](https://proceedings.neurips.cc/paper/2021/hash/ddf88ea64eaed0f3de5531ac964a0a1a-Abstract.html) representation with the objective of applying the GAT network to this more structured representation, but we faced some issues in the manipulation of this structure by GAT. 
